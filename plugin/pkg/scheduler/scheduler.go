@@ -39,6 +39,11 @@ import (
 	"github.com/golang/glog"
 )
 
+var TotalBindTime time.Duration
+var TotalScheduleAlgoTime time.Duration
+var e2eAlgoPlusScheduleTime time.Duration
+var BindCalls,ScheduleCalls,e2eCalls int64
+
 // Binder knows how to write a binding.
 type Binder interface {
 	Bind(binding *v1.Binding) error
@@ -263,6 +268,12 @@ func (sched *Scheduler) scheduleOne() {
 	// Synchronously attempt to find a fit for the pod.
 	start := time.Now()
 	suggestedHost, err := sched.schedule(pod)
+        newNowTime:=time.Now()
+        glog.Info("ScheduleAlgoTime ",newNowTime.Sub(start)," Start:",start," End:",newNowTime)
+        TotalScheduleAlgoTime+=newNowTime.Sub(start)
+        ScheduleCalls+=1
+        glog.Info("Total Schedule Algo cumulative time:", TotalScheduleAlgoTime," for ",ScheduleCalls)
+
 	metrics.SchedulingAlgorithmLatency.Observe(metrics.SinceInMicroseconds(start))
 	if err != nil {
 		return
@@ -278,7 +289,8 @@ func (sched *Scheduler) scheduleOne() {
 	}
 
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
-	go func() {
+        e2eCalls+=1
+	go func(calls int64) {
 		err := sched.bind(&assumedPod, &v1.Binding{
 			ObjectMeta: metav1.ObjectMeta{Namespace: assumedPod.Namespace, Name: assumedPod.Name, UID: assumedPod.UID},
 			Target: v1.ObjectReference{
@@ -290,5 +302,5 @@ func (sched *Scheduler) scheduleOne() {
 		if err != nil {
 			glog.Errorf("Internal error binding pod: (%v)", err)
 		}
-	}()
+	}(e2eCalls)
 }

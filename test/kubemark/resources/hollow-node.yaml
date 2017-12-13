@@ -5,7 +5,7 @@ metadata:
   labels:
     name: hollow-node
 spec:
-  replicas: {{numreplicas}}
+  replicas: 100
   selector:
     name: hollow-node
   template:
@@ -36,7 +36,7 @@ spec:
         emptyDir: {}
       containers:
       - name: hollow-kubelet
-        image: {{registry}}/{{project}}/kubemark:v10.0
+        image: gcr.io/poseidon-173606/kubemark:v10.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 4194
@@ -55,7 +55,7 @@ spec:
         command:
         - /bin/sh
         - -c
-        - /kubemark --morph=kubelet --name=$(NODE_NAME) --kubeconfig=/kubeconfig/kubelet.kubeconfig $(CONTENT_TYPE) --alsologtostderr {{kubelet_verbosity_level}} 1>>/var/log/kubelet-$(NODE_NAME).log 2>&1
+        - /kubemark --morph=kubelet --name=$(NODE_NAME) --kubeconfig=/kubeconfig/kubelet.kubeconfig $(CONTENT_TYPE) --alsologtostderr --v=2 1>>/var/log/kubelet-$(NODE_NAME).log 2>&1
         volumeMounts:
         - name: kubeconfig-volume
           mountPath: /kubeconfig

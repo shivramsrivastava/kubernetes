@@ -363,7 +363,7 @@ function wait-for-hollow-nodes-to-run-or-timeout {
   
   until [[ "${ready}" -ge "${NUM_NODES}" ]]; do
     echo -n "."
-    sleep 1
+    sleep 5
     now=$(date +%s)
     # Fail it if it already took more than 30 minutes.
     if [ $((now - start)) -gt 1800 ]; then

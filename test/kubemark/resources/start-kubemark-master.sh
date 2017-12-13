@@ -517,7 +517,7 @@ fi
 start-kubemaster-component "kube-apiserver"
 start-kubemaster-component "kube-controller-manager"
 # Kubemark_changes: Commented below line to stop default scheduler to start in Kubemark master.
-start-kubemaster-component "kube-scheduler"
+#start-kubemaster-component "kube-scheduler"
 start-kubemaster-component "kube-addon-manager"
 
 # Wait till apiserver is working fine or timeout.

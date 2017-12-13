@@ -28,13 +28,13 @@ function get-master-size {
     suggested_master_size=8
   fi
   if [[ "${NUM_NODES}" -gt "250" ]]; then
-    suggested_master_size=8
+    suggested_master_size=16
   fi
   if [[ "${NUM_NODES}" -gt "500" ]]; then
-    suggested_master_size=8
+    suggested_master_size=32
   fi
   if [[ "${NUM_NODES}" -gt "3000" ]]; then
-    suggested_master_size=8
+    suggested_master_size=64
   fi
   echo "${suggested_master_size}"
 }
