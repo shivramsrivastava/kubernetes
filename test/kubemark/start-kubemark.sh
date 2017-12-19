@@ -156,6 +156,9 @@ EOF
 }
 
 # Copy all the necessary resource files (scripts/configs/manifests) to the master.
+# Kubemark_changes: We need 'kubelet' on kubemark master as Ubuntu won't come with 
+# preinstalled kubelet, so copying locally built kubelet executable to kubemark master.
+# This can be later changed to installing kubelet itself on kubemark master.
 function copy-resource-files-to-master {
   copy-files \
     "${SERVER_BINARY_TAR}" \
@@ -170,6 +173,7 @@ function copy-resource-files-to-master {
     "${RESOURCE_DIRECTORY}/manifests/kube-controller-manager.yaml" \
     "${RESOURCE_DIRECTORY}/manifests/kube-addon-manager.yaml" \
     "${RESOURCE_DIRECTORY}/manifests/addons/kubemark-rbac-bindings" \
+    "/root/kubelet" \
     "kubernetes@${MASTER_NAME}":/home/kubernetes/
   echo "Copied server binary, master startup scripts, configs and resource manifests to master."
 }
@@ -213,6 +217,20 @@ function create-and-upload-hollow-node-image {
   rm kubemark
   cd $CURR_DIR
   echo "Created and uploaded the kubemark hollow-node image to docker registry."
+}
+
+#Kubemark_changes:  Kubeadm does not know how to authenticate with GCR, configure authentication to GCR
+# using a short-lived access token.
+function AuthenticateWithGCR {
+  # Create the docker-registry secret
+  "${KUBECTL}" --namespace=kubemark create secret docker-registry gcr \
+    --docker-server=https://gcr.io \
+    --docker-username=oauth2accesstoken \
+    --docker-password="$(gcloud auth print-access-token)" \
+    --docker-email=shivram.srivastava@gmail.com
+  # Patch the default service account with ImagePullSecrets
+  "${KUBECTL}" --namespace=kubemark patch serviceaccount default \
+    -p '{"imagePullSecrets": [{"name": "gcr"}]}'
 }
 
 # Use bazel rule to create a docker image for hollow-node and upload
@@ -349,6 +367,8 @@ current-context: kubemark-context")
     --from-literal=heapster.kubeconfig="${HEAPSTER_KUBECONFIG_CONTENTS}" \
     --from-literal=cluster_autoscaler.kubeconfig="${CLUSTER_AUTOSCALER_KUBECONFIG_CONTENTS}" \
     --from-literal=npd.kubeconfig="${NPD_KUBECONFIG_CONTENTS}"
+  # Kubemark_changes: Authentication with the GCR.  
+  AuthenticateWithGCR
 
   # Create addon pods.
   # Heapster.
@@ -382,26 +402,50 @@ current-context: kubemark-context")
 
   "${KUBECTL}" create -f "${RESOURCE_DIRECTORY}/addons" --namespace="kubemark"
 
-  # Create the replication controller for hollow-nodes.
-  # We allow to override the NUM_REPLICAS when running Cluster Autoscaler.
-  NUM_REPLICAS=${NUM_REPLICAS:-${NUM_NODES}}
-  sed "s/{{numreplicas}}/${NUM_REPLICAS}/g" "${RESOURCE_DIRECTORY}/hollow-node_template.yaml" > "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  proxy_cpu=20
-  if [ "${NUM_NODES}" -gt 1000 ]; then
-    proxy_cpu=50
-  fi
-  proxy_mem_per_node=50
-  proxy_mem=$((100 * 1024 + ${proxy_mem_per_node}*${NUM_NODES}))
-  sed -i'' -e "s/{{HOLLOW_PROXY_CPU}}/${proxy_cpu}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s/{{HOLLOW_PROXY_MEM}}/${proxy_mem}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s/{{registry}}/${CONTAINER_REGISTRY}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s/{{project}}/${PROJECT}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s/{{master_ip}}/${MASTER_IP}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s/{{kubelet_verbosity_level}}/${KUBELET_TEST_LOG_LEVEL}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s/{{kubeproxy_verbosity_level}}/${KUBEPROXY_TEST_LOG_LEVEL}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s/{{use_real_proxier}}/${USE_REAL_PROXIER}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s'{{kubemark_mig_config}}'${KUBEMARK_MIG_CONFIG:-}'g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  "${KUBECTL}" create -f "${RESOURCE_DIRECTORY}/hollow-node.yaml" --namespace="kubemark"
+  ORIG_NUM_NODES=$NUM_NODES
+  var2=2000
+  number_of_rcs=$((NUM_NODES / var2))
+  echo "No of replication controller that gets created is" number_of_rcs
+  
+  NUM_NODES=$var2
+  for i in `seq 1 $number_of_rcs`;
+  do
+          # Create the replication controller for hollow-nodes.
+         sed "s/{{numreplicas}}/${NUM_NODES:-10}/g" "${RESOURCE_DIRECTORY}/hollow-node_template.yaml" > "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+         proxy_cpu=20
+         if [ "${NUM_NODES:-10}" -gt 1000 ]; then
+           proxy_cpu=50
+         fi
+         proxy_mem_per_node=50
+         #proxy_mem=$((100 * 1024 + ${proxy_mem_per_node}*${NUM_NODES:-10}))
+         #proxy mem usage optimised value
+         proxy_mem=80
+         sed -i'' -e "s/{{HOLLOW_PROXY_CPU}}/${proxy_cpu}/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+         sed -i'' -e "s/{{HOLLOW_PROXY_MEM}}/${proxy_mem}/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+         sed -i'' -e "s/{{registry}}/${CONTAINER_REGISTRY}/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+         sed -i'' -e "s/{{project}}/${PROJECT}/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+         sed -i'' -e "s/{{master_ip}}/${MASTER_IP}/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+         sed -i'' -e "s/{{kubelet_verbosity_level}}/${KUBELET_TEST_LOG_LEVEL}/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+         sed -i'' -e "s/{{kubeproxy_verbosity_level}}/${KUBEPROXY_TEST_LOG_LEVEL}/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+         sed -i'' -e "s/{{use_real_proxier}}/${USE_REAL_PROXIER}/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+          #Change name of RC accordingly
+         sed -i'' -e "s/hollow-node/hollow-node$i/g" "${RESOURCE_DIRECTORY}/hollow-node$i.yaml"
+          
+          echo "Nice.... hollow-node$i.yaml created"
+  done
+  for j in `seq 1 $number_of_rcs`;
+  do
+          #echo "Going to create hollow-node$j.yaml .... "
+         #read -p "Are you sure? " -n 1 -r
+#        echo    # (optional) move to a new line
+#        if [[ $REPLY =~ ^[Yy]$ ]]
+#        then
+           # do dangerous stuff
+           "${KUBECTL}" create -f "${RESOURCE_DIRECTORY}/hollow-node$j.yaml" --namespace="kubemark"
+#        fi
+  done
+  NUM_NODES=$ORIG_NUM_NODES
+  
 
   echo "Created secrets, configMaps, replication-controllers required for hollow-nodes."
 }
@@ -413,7 +457,7 @@ function wait-for-hollow-nodes-to-run-or-timeout {
   nodes=$("${KUBECTL}" --kubeconfig="${LOCAL_KUBECONFIG}" get node 2> /dev/null) || true
   ready=$(($(echo "${nodes}" | grep -v "NotReady" | wc -l) - 1))
   
-  until [[ "${ready}" -ge "${NUM_REPLICAS}" ]]; do
+  until [[ "${ready}" -ge "${NUM_NODES}" ]]; do
     echo -n "."
     sleep 1
     now=$(date +%s)
