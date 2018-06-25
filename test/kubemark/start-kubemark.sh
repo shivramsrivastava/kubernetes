@@ -224,6 +224,20 @@ function create-and-upload-hollow-node-image {
   echo "Created and uploaded the kubemark hollow-node image to docker registry."
 }
 
+#Kubemark_changes:  Kubeadm does not know how to authenticate with GCR, configure authentication to GCR
+# using a short-lived access token.
+function AuthenticateWithGCR {
+  # Create the docker-registry secret
+  "${KUBECTL}" --namespace=kubemark create secret docker-registry gcr \
+    --docker-server=https://gcr.io \
+    --docker-username=oauth2accesstoken \
+    --docker-password="$(gcloud auth print-access-token)" \
+    --docker-email=poseidontest2018@gmail.com
+  # Patch the default service account with ImagePullSecrets
+  "${KUBECTL}" --namespace=kubemark patch serviceaccount default \
+    -p '{"imagePullSecrets": [{"name": "gcr"}]}'
+}
+
 # Use bazel rule to create a docker image for hollow-node and upload
 # it to the appropriate docker container registry for the cloud provider.
 function create-and-upload-hollow-node-image-bazel {
@@ -362,6 +376,8 @@ current-context: kubemark-context")
     --from-literal=heapster.kubeconfig="${HEAPSTER_KUBECONFIG_CONTENTS}" \
     --from-literal=cluster_autoscaler.kubeconfig="${CLUSTER_AUTOSCALER_KUBECONFIG_CONTENTS}" \
     --from-literal=npd.kubeconfig="${NPD_KUBECONFIG_CONTENTS}"
+  # Kubemark_changes: Authentication with the GCR.  
+  AuthenticateWithGCR
 
   # Create addon pods.
   # Heapster.
@@ -428,7 +444,7 @@ function wait-for-hollow-nodes-to-run-or-timeout {
   
   until [[ "${ready}" -ge "${NUM_REPLICAS}" ]]; do
     echo -n "."
-    sleep 1
+    sleep 5
     now=$(date +%s)
     # Fail it if it already took more than 30 minutes.
     if [ $((now - start)) -gt 1800 ]; then
