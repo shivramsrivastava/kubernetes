@@ -46,12 +46,19 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/util"
 
 	"k8s.io/klog"
+	"github.com/golang/glog"
 )
 
 const (
 	// BindTimeoutSeconds defines the default bind timeout
 	BindTimeoutSeconds = 100
 )
+
+// Benchmarking code changes to measure scheduling time.
+var TotalBindTime time.Duration
+var TotalScheduleAlgoTime time.Duration
+//var e2eAlgoPlusScheduleTime time.Duration
+var BindCalls,ScheduleCalls,e2eCalls int64
 
 // Scheduler watches for new unscheduled pods. It attempts to find
 // nodes that they fit on and writes bindings back to the api server.
@@ -510,6 +517,11 @@ func (sched *Scheduler) scheduleOne() {
 	// Synchronously attempt to find a fit for the pod.
 	start := time.Now()
 	suggestedHost, err := sched.schedule(pod)
+	newNowTime:=time.Now()
+	glog.Info("ScheduleAlgoTime ",newNowTime.Sub(start)," Start:",start," End:",newNowTime)
+	TotalScheduleAlgoTime+=newNowTime.Sub(start)
+	ScheduleCalls+=1
+	glog.Info("Total Schedule Algo cumulative time:", TotalScheduleAlgoTime," for ",ScheduleCalls)
 	if err != nil {
 		// schedule() may have failed because the pod would not fit on any host, so we try to
 		// preempt, with the expectation that the next time the pod is tried for scheduling it
@@ -558,7 +570,8 @@ func (sched *Scheduler) scheduleOne() {
 		return
 	}
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
-	go func() {
+	e2eCalls+=1
+	go func(calls int64) {
 		// Bind volumes first before Pod
 		if !allBound {
 			err := sched.bindVolumes(assumedPod)
@@ -583,5 +596,5 @@ func (sched *Scheduler) scheduleOne() {
 		} else {
 			metrics.PodScheduleSuccesses.Inc()
 		}
-	}()
+	}(e2eCalls)
 }

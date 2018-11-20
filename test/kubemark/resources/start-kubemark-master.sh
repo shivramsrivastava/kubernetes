@@ -700,6 +700,16 @@ assemble-docker-flags
 DOCKER_REGISTRY="k8s.gcr.io"
 load-docker-images
 
+# Kubemark_changes: Downlaod and install kubectl, kubelet on kubemark master.
+if ! type "kubelet" > /dev/null; then
+  echo "Kubelet is not installed, so downloading kubelet v1.10.4 manually on kubemark master.."
+fi
+ curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.10.4/bin/linux/amd64/kubelet
+curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.10.4/bin/linux/amd64/kubectl
+chmod +x ./kubectl
+chmod +x ./kubelet
+sudo mv ./kubelet /usr/bin/kubelet
+sudo mv ./kubectl /usr/bin/kubectl
 readonly audit_policy_file="/etc/audit_policy.config"
 
 # Start kubelet as a supervisord process and master components as pods.
@@ -710,7 +720,8 @@ if [ "${EVENT_STORE_IP:-}" == "127.0.0.1" ]; then
 fi
 start-kubemaster-component "kube-apiserver"
 start-kubemaster-component "kube-controller-manager"
-start-kubemaster-component "kube-scheduler"
+# Kubemark_changes: Commented below line to stop default scheduler to start in Kubemark master
+# start-kubemaster-component "kube-scheduler"
 start-kubemaster-component "kube-addon-manager"
 
 # Wait till apiserver is working fine or timeout.
