@@ -211,11 +211,17 @@ function create-and-upload-hollow-node-image {
       echo 'Cannot find cmd/kubemark binary'
       exit 1
     fi
+
+    echo "Configuring registry authentication"
+    mkdir -p "${HOME}/.docker"
+    gcloud beta auth configure-docker -q
+
     echo "Copying kubemark binary to ${MAKE_DIR}"
     cp "${KUBEMARK_BIN}" "${MAKE_DIR}"
     CURR_DIR=$(pwd)
     cd "${MAKE_DIR}"
-    REGISTRY=${KUBEMARK_IMAGE_REGISTRY} IMAGE_TAG=${KUBEMARK_IMAGE_TAG} run-cmd-with-retries "${build_cmd[@]}"
+    #REGISTRY=${KUBEMARK_IMAGE_REGISTRY} IMAGE_TAG=${KUBEMARK_IMAGE_TAG} run-cmd-with-retries "${build_cmd[@]}"
+    REGISTRY=${FULL_REGISTRY} IMAGE_TAG=${KUBEMARK_IMAGE_TAG} run-cmd-with-retries "${build_cmd[@]}"
     rm kubemark
     cd "$CURR_DIR"
   fi
@@ -241,7 +247,8 @@ function AuthenticateWithGCR {
 }
 
 function delete-kubemark-image {
-  delete-image "${KUBEMARK_IMAGE_REGISTRY}/kubemark:${KUBEMARK_IMAGE_TAG}"
+  #delete-image "${KUBEMARK_IMAGE_REGISTRY}/kubemark:${KUBEMARK_IMAGE_TAG}"
+  delete-image "${FULL_REGISTRY}/kubemark:${KUBEMARK_IMAGE_TAG}"
 }
 
 # Generate secret and configMap for the hollow-node pods to work, prepare
@@ -432,7 +439,8 @@ current-context: kubemark-context"
   proxy_mem=$((100 * 1024 + ${proxy_mem_per_node}*${NUM_NODES}))
   sed -i'' -e "s/{{HOLLOW_PROXY_CPU}}/${proxy_cpu}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
   sed -i'' -e "s/{{HOLLOW_PROXY_MEM}}/${proxy_mem}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
-  sed -i'' -e "s'{{kubemark_image_registry}}'${KUBEMARK_IMAGE_REGISTRY}'g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
+#  sed -i'' -e "s'{{kubemark_image_registry}}'${KUBEMARK_IMAGE_REGISTRY}'g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
+  sed -i'' -e "s'{{kubemark_image_registry}}'${FULL_REGISTRY}'g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
   sed -i'' -e "s/{{kubemark_image_tag}}/${KUBEMARK_IMAGE_TAG}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
   sed -i'' -e "s/{{master_ip}}/${MASTER_IP}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
   sed -i'' -e "s/{{hollow_kubelet_params}}/${HOLLOW_KUBELET_TEST_ARGS}/g" "${RESOURCE_DIRECTORY}/hollow-node.yaml"
@@ -497,7 +505,8 @@ function start-master {
   copy-resource-files-to-master
   start-master-components
 }
-start-master &
+#start-master &
+start-master
 
 # Setup for hollow-nodes.
 function start-hollow-nodes {
@@ -506,7 +515,8 @@ function start-hollow-nodes {
   create-kube-hollow-node-resources
   wait-for-hollow-nodes-to-run-or-timeout
 }
-start-hollow-nodes &
+#start-hollow-nodes &
+start-hollow-nodes
 
 wait
 echo ""

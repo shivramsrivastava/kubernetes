@@ -82,6 +82,7 @@ fi
 # you are updating the os image versions, update this variable.
 # Also please update corresponding image for node e2e at:
 # https://github.com/kubernetes/kubernetes/blob/master/test/e2e_node/jenkins/image-config.yaml
+CVM_VERSION=${CVM_VERSION:-container-vm-v20170627}
 # GCI_VERSION=${KUBE_GCI_VERSION:-cos-stable-65-10323-64-0}
 GCI_VERSION=${KUBE_GCI_VERSION:-ubuntu-gke-1604-xenial-v20170420-1}
 MASTER_IMAGE=${KUBE_GCE_MASTER_IMAGE:-}

@@ -704,8 +704,8 @@ load-docker-images
 if ! type "kubelet" > /dev/null; then
   echo "Kubelet is not installed, so downloading kubelet v1.10.4 manually on kubemark master.."
 fi
- curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.10.4/bin/linux/amd64/kubelet
-curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.10.4/bin/linux/amd64/kubectl
+ curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.12.2/bin/linux/amd64/kubelet
+curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.12.2/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 chmod +x ./kubelet
 sudo mv ./kubelet /usr/bin/kubelet

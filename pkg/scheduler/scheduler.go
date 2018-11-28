@@ -46,7 +46,6 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/util"
 
 	"k8s.io/klog"
-	"github.com/golang/glog"
 )
 
 const (
@@ -522,10 +521,10 @@ func (sched *Scheduler) scheduleOne() {
 	start := time.Now()
 	suggestedHost, err := sched.schedule(pod)
 	newNowTime:=time.Now()
-	glog.Info("ScheduleAlgoTime ",newNowTime.Sub(start)," Start:",start," End:",newNowTime)
+	klog.Info("ScheduleAlgoTime ",newNowTime.Sub(start)," Start:",start," End:",newNowTime)
 	TotalScheduleAlgoTime+=newNowTime.Sub(start)
 	ScheduleCalls+=1
-	glog.Info("Total Schedule Algo cumulative time:", TotalScheduleAlgoTime," for ",ScheduleCalls)
+	klog.Info("Total Schedule Algo cumulative time:", TotalScheduleAlgoTime," for ",ScheduleCalls)
 	if err != nil {
 		// schedule() may have failed because the pod would not fit on any host, so we try to
 		// preempt, with the expectation that the next time the pod is tried for scheduling it
