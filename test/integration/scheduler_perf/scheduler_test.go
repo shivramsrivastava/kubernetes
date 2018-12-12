@@ -17,6 +17,7 @@ limitations under the License.
 package benchmark
 
 import (
+	"bufio"
 	"fmt"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -29,6 +30,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"os"
 )
 
 const (
@@ -70,7 +73,7 @@ func TestSchedule100Node3KPods(t *testing.T) {
 		t.Skip("Skipping because we want to run short tests")
 	}
 
-	config := getBaseConfig(100, 3000)
+	config := getBaseConfig(1000, 30000)
 	err := writePodAndNodeTopologyToConfig(config)
 	if err != nil {
 		t.Errorf("Misconfiguration happened for nodes/pods chosen to have predicates and priorities")
@@ -126,6 +129,16 @@ func getBaseConfig(nodes int, pods int) *testConfig {
 // It won't stop until all pods are scheduled.
 // It returns the minimum of throughput over whole run.
 func schedulePods(config *testConfig) int32 {
+
+	benchmarkFile := "benchmark-"
+	file, err := os.OpenFile(benchmarkFile+"_"+time.Now().String(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+
+	if err != nil {
+		klog.Fatal(err, " Unable to open file")
+	}
+
+	bufWriter := bufio.NewWriter(file)
+
 	defer config.destroyFunc()
 	prev := 0
 	// On startup there may be a latent period where NO scheduling occurs (qps = 0).
@@ -166,8 +179,15 @@ func schedulePods(config *testConfig) int32 {
 			if consumed <= 0 {
 				consumed = 1
 			}
-			fmt.Printf("Scheduled %v Pods in %v seconds (%v per second on average). min QPS was %v\n",
-				config.numPods, consumed, config.numPods/consumed, minQps)
+
+			//bufWriter.WriteString()
+			bufWriter.WriteString(fmt.Sprintf("Scheduled %v Pods in %v seconds (%v per second on average). min QPS was %v\n",
+				config.numPods, consumed, config.numPods/consumed, minQps))
+
+			bufWriter.Flush()
+
+			//fmt.Printf("Scheduled %v Pods in %v seconds (%v per second on average). min QPS was %v\n",
+			//	config.numPods, consumed, config.numPods/consumed, minQps)
 			return minQps
 		}
 
@@ -177,10 +197,13 @@ func schedulePods(config *testConfig) int32 {
 		if int32(qps) < minQps {
 			minQps = int32(qps)
 		}
-		fmt.Printf("%ds\trate: %d\ttotal: %d (qps frequency: %v)\n", time.Since(start)/time.Second, qps, len(scheduled), qpsStats)
+		bufWriter.WriteString(fmt.Sprintf("%ds\trate: %d\ttotal: %d (qps frequency: %v)\n", time.Since(start)/time.Second, qps, len(scheduled), qpsStats))
+		//fmt.Printf("%ds\trate: %d\ttotal: %d (qps frequency: %v)\n", time.Since(start)/time.Second, qps, len(scheduled), qpsStats)
 		prev = len(scheduled)
 		time.Sleep(1 * time.Second)
+		bufWriter.Flush()
 	}
+
 }
 
 // mutateNodeTemplate returns the modified node needed for creation of nodes.
@@ -240,16 +263,13 @@ func (inputConfig *schedulerPerfConfig) generatePodAndNodeTopology(config *testC
 	if config.numNodes < inputConfig.NodeCount || config.numPods < inputConfig.PodCount {
 		return fmt.Errorf("NodeCount cannot be greater than numNodes")
 	}
-	nodeAffinity := inputConfig.NodeAffinity
+
 	// Node template that needs to be mutated.
 	mutatedNodeTemplate := baseNodeTemplate
 	// Pod template that needs to be mutated.
+	basePodTemplate.Spec.SchedulerName = "poseidon"
 	mutatedPodTemplate := basePodTemplate
-	if nodeAffinity != nil {
-		nodeAffinity.mutateNodeTemplate(mutatedNodeTemplate)
-		nodeAffinity.mutatePodTemplate(mutatedPodTemplate)
-
-	} // TODO: other predicates/priorities will be processed in subsequent if statements or a switch:).
+	mutatedPodTemplate.Spec.SchedulerName = "poseidon"
 	config.mutatedPodTemplate = mutatedPodTemplate
 	config.mutatedNodeTemplate = mutatedNodeTemplate
 	inputConfig.generateNodes(config)
@@ -262,12 +282,8 @@ func (inputConfig *schedulerPerfConfig) generatePodAndNodeTopology(config *testC
 func writePodAndNodeTopologyToConfig(config *testConfig) error {
 	// High Level structure that should be filled for every predicate or priority.
 	inputConfig := &schedulerPerfConfig{
-		NodeCount: 100,
-		PodCount:  3000,
-		NodeAffinity: &nodeAffinity{
-			nodeAffinityKey: "kubernetes.io/sched-perf-node-affinity-",
-			LabelCount:      10,
-		},
+		NodeCount: 1000,
+		PodCount:  30000,
 	}
 	err := inputConfig.generatePodAndNodeTopology(config)
 	if err != nil {
