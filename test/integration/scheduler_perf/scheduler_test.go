@@ -42,6 +42,12 @@ const (
 )
 
 var (
+	nodeCnt=2500
+	schedulername = "poseidon" // "default" //"poseidon"
+	// #########
+	// Dont chnage pod count
+	podCnt=10000
+	// ###########
 	basePodTemplate = &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "sched-perf-pod-",
@@ -73,11 +79,15 @@ func TestSchedule100Node3KPods(t *testing.T) {
 		t.Skip("Skipping because we want to run short tests")
 	}
 
-	config := getBaseConfig(1000, 30000)
+	config := getBaseConfig(nodeCnt, podCnt)
 	err := writePodAndNodeTopologyToConfig(config)
 	if err != nil {
 		t.Errorf("Misconfiguration happened for nodes/pods chosen to have predicates and priorities")
 	}
+	if schedulername=="poseidon"{
+        	fmt.Println("Start the Poseidon now")
+	}
+	fmt.Println("started measuring the pods ")
 	min := schedulePods(config)
 	if min < threshold3K {
 		t.Errorf("Failing: Scheduling rate was too low for an interval, we saw rate of %v, which is the allowed minimum of %v ! ", min, threshold3K)
@@ -130,9 +140,8 @@ func getBaseConfig(nodes int, pods int) *testConfig {
 // It returns the minimum of throughput over whole run.
 func schedulePods(config *testConfig) int32 {
 
-	benchmarkFile := "benchmark-"
-	file, err := os.OpenFile(benchmarkFile+"_"+time.Now().String(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-
+	filename:=fmt.Sprintf("%s_%dk-nodes_%dk-Pods",schedulername,(config.numNodes/1000),(config.numPods/1000))
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		klog.Fatal(err, " Unable to open file")
 	}
@@ -200,7 +209,7 @@ func schedulePods(config *testConfig) int32 {
 		bufWriter.WriteString(fmt.Sprintf("%ds\trate: %d\ttotal: %d (qps frequency: %v)\n", time.Since(start)/time.Second, qps, len(scheduled), qpsStats))
 		//fmt.Printf("%ds\trate: %d\ttotal: %d (qps frequency: %v)\n", time.Since(start)/time.Second, qps, len(scheduled), qpsStats)
 		prev = len(scheduled)
-		time.Sleep(1 * time.Second)
+		time.Sleep(5 * time.Second)
 		bufWriter.Flush()
 	}
 
@@ -267,9 +276,13 @@ func (inputConfig *schedulerPerfConfig) generatePodAndNodeTopology(config *testC
 	// Node template that needs to be mutated.
 	mutatedNodeTemplate := baseNodeTemplate
 	// Pod template that needs to be mutated.
-	basePodTemplate.Spec.SchedulerName = "poseidon"
+	if schedulername!="default"{
+		basePodTemplate.Spec.SchedulerName=schedulername
+	}
 	mutatedPodTemplate := basePodTemplate
-	mutatedPodTemplate.Spec.SchedulerName = "poseidon"
+	if schedulername!="default"{
+		mutatedPodTemplate.Spec.SchedulerName=schedulername
+	}
 	config.mutatedPodTemplate = mutatedPodTemplate
 	config.mutatedNodeTemplate = mutatedNodeTemplate
 	inputConfig.generateNodes(config)
@@ -282,8 +295,8 @@ func (inputConfig *schedulerPerfConfig) generatePodAndNodeTopology(config *testC
 func writePodAndNodeTopologyToConfig(config *testConfig) error {
 	// High Level structure that should be filled for every predicate or priority.
 	inputConfig := &schedulerPerfConfig{
-		NodeCount: 1000,
-		PodCount:  30000,
+		NodeCount: nodeCnt,
+		PodCount:  podCnt,
 	}
 	err := inputConfig.generatePodAndNodeTopology(config)
 	if err != nil {

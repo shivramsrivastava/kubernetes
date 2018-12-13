@@ -23,7 +23,6 @@ import (
 	_ "k8s.io/kubernetes/pkg/scheduler/algorithmprovider"
 	"k8s.io/kubernetes/pkg/scheduler/factory"
 	"k8s.io/kubernetes/test/integration/util"
-	"time"
 
 	"fmt"
 )
@@ -47,7 +46,6 @@ func mustSetupScheduler() (factory.Configurator, util.ShutdownFunc) {
 	fmt.Println("\n\n\n\n\n\n\n\n\n\n#########################")
 	fmt.Println("apiserver url ", apiURL)
 	fmt.Println("\n\n\n\n\n\n#########################")
-	time.Sleep(time.Second * 10)
 
 	schedulerConfig, schedulerShutdown := util.StartScheduler(clientSet)
 
